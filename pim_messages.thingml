@@ -30,4 +30,6 @@ thing fragment OnOffMsg includes DeviceGeneral{
 	message SwitchStateOn(did:Integer);
 	message SwitchStateOff(did:Integer);
 	message StateQuery(did:Integer);
+	message CurrentPower(power:Integer);
+	message TotalPower(power:Double);
 }

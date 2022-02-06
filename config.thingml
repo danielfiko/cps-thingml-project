@@ -11,7 +11,9 @@ configuration CPS {
 	instance myself:Human
 	instance g_temp:TimerJava
 	instance g_humn:TimerJava
+	instance g_switch:TimerJava
 	instance timer : TimerJava
+	instance pwr_timer:TimerJava
 	
 	// SIMULATION
 	instance tg:TempSim
@@ -27,6 +29,7 @@ configuration CPS {
 	
 	connector onoff1.show_val => onoffobs.show_onoff
 	connector onoff1.send_state => pim.recv_state
+	connector onoff1.pwr_timer => pwr_timer.timer
 	
 	// HMI
 	connector myself.send_cmd => pim.human_input
@@ -38,6 +41,7 @@ configuration CPS {
 	
 	connector pim.guard_temperature =>g_temp.timer
 	connector pim.guard_human => g_humn.timer
+	connector pim.guard_switch => g_switch.timer
 	
 	// SIMULATION
 	connector tg.give_values => T1.get_values

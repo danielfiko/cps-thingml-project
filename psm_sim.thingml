@@ -41,7 +41,7 @@ thing ZstickManager includes PSM_Msg
 	}
 } //end of ZstickManager
 
-thing ThermometerSet includes GeneralMsg,TemperatureMsg, PSM_Msg, TimerClient {
+thing ThermometerSet includes GeneralMsg, TemperatureMsg, PSM_Msg, TimerClient {
 // TimerClient introduced 160310
 	required port provide_val {sends temperature}
 	required port show_values {sends temperature}
@@ -128,23 +128,30 @@ thing ThermometerSet includes GeneralMsg,TemperatureMsg, PSM_Msg, TimerClient {
 
 
 
-thing OnOffSet includes PSM_Msg, OnOffMsg{
+thing OnOffSet includes PSM_Msg, OnOffMsg, TimerClient{
 	provided port require_val {receives SwitchOn, SwitchOff, add_device, StateQuery}
 	provided port initial {receives initialize}
 	required port show_val {sends SwitchOn, SwitchOff}
 	provided port recv_state {receives SwitchStateOn, SwitchStateOff}
-	required port send_state {sends SwitchStateOn, SwitchStateOff}
+	required port send_state {sends SwitchStateOn, SwitchStateOff, CurrentPower, TotalPower}
+	required port pwr_timer {
+		receives timer_timeout
+		sends timer_start
+	}
 	
 	property onoffswitches:Integer[25] // Identifiers of the onoffswitches in the set
 	property last_onoff:Integer = 0 // number of onoff switches in the set 
 	
 	// SIMULATION
 	property poweron:Boolean[25] // SIMULATION false=OFF true=ON for corresponding switches
+	property switch_on:Boolean
+	property total_power:Double
 	
 	property i:Integer // runner index in list
 	property did:Integer // temporary device id
 	// property d:Device // temporary device removed at SIMULATION
 	property found:Boolean // temporary boolean used in while loop
+	property fail_counter:Integer
 	
 	statechart behaviorOnOffSet init Init {
 		state Init {
@@ -152,6 +159,15 @@ thing OnOffSet includes PSM_Msg, OnOffMsg{
 			event initial: initial?initialize
 		}
 		state Idle {
+		on entry pwr_timer!timer_start(1000)
+		
+			transition -> Idle
+			event pwr_timer?timer_timeout
+			guard switch_on
+			action do
+				total_power = total_power + 1200*60*60/1000/60/60
+			end
+			
 			transition -> Idle
 			event add_dev: require_val?add_device
 			action do
@@ -174,8 +190,16 @@ thing OnOffSet includes PSM_Msg, OnOffMsg{
 				end
 				if (found) do
 					poweron[i-1]=true // ON by SIMULATION
-					show_val!SwitchOn(did)
-					send_state!SwitchStateOn(did)
+					if (fail_counter < 2) do
+						send_state!CurrentPower(1200*60*60) // simulated number in W
+						show_val!SwitchOn(did)
+						send_state!SwitchStateOn(did)
+						fail_counter=fail_counter+1
+						switch_on = true
+					end
+					else do
+						fail_counter=0
+					end
 				end
 			end
 			transition -> Idle
@@ -192,8 +216,16 @@ thing OnOffSet includes PSM_Msg, OnOffMsg{
 				end
 				if (found) do
 					poweron[i-1]=false // OFF by SIMULATION
-					show_val!SwitchOff(did)
-					send_state!SwitchStateOff(did)
+					if (fail_counter < 2) do
+						show_val!SwitchOff(did)
+						send_state!TotalPower(total_power)
+						send_state!SwitchStateOff(did)
+						fail_counter=fail_counter+1
+						switch_on = false
+					end
+					else do
+						fail_counter=0
+					end
 				end
 			end
 		}
