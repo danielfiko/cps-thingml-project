@@ -45,4 +45,5 @@ configuration CPS {
 	
 	// SIMULATION
 	connector tg.give_values => T1.get_values
+	connector onoffobs.give_power_usage => T1.get_power_usage
 }

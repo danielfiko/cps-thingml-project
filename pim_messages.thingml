@@ -33,3 +33,8 @@ thing fragment OnOffMsg includes DeviceGeneral{
 	message CurrentPower(power:Integer);
 	message TotalPower(power:Double);
 }
+
+thing fragment Switch {
+	message current_power(id:Integer, kw:Integer);
+	message total_power(id:Integer, kwh:Double)
+}

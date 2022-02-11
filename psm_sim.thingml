@@ -41,13 +41,14 @@ thing ZstickManager includes PSM_Msg
 	}
 } //end of ZstickManager
 
-thing ThermometerSet includes GeneralMsg, TemperatureMsg, PSM_Msg, TimerClient {
+thing ThermometerSet includes GeneralMsg, TemperatureMsg, PSM_Msg, TimerClient, Switch {
 // TimerClient introduced 160310
 	required port provide_val {sends temperature}
 	required port show_values {sends temperature}
 	provided port require_val {receives add_thermometer, set_polling_interval}
 	provided port initial {receives initialize}
 	provided port get_values {receives temperature} // SIMULATION
+	provided port get_power_usage {receives  current_power, total_power}
 		
 	property thermometers:Integer[25] // Identifiers of the thermometers in the set
 	property thermotext:String[25] // corresponding explanatory text 
@@ -244,8 +245,9 @@ thing TempSim includes TemperatureMsg
 }
 
 
-thing OnOffSim includes OnOffMsg 
+thing OnOffSim includes OnOffMsg, Switch
 @mock "true"
 {	provided port show_onoff {receives SwitchOn, SwitchOff}
+	required port give_power_usage {sends current_power, total_power}
 }
 
