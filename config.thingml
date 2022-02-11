@@ -31,6 +31,8 @@ configuration CPS {
 	connector onoff1.send_state => pim.recv_state
 	connector onoff1.pwr_timer => pwr_timer.timer
 	
+	connector onoff1.send_power_usage => pim.get_power_usage
+	
 	// HMI
 	connector myself.send_cmd => pim.human_input
 	
@@ -45,5 +47,5 @@ configuration CPS {
 	
 	// SIMULATION
 	connector tg.give_values => T1.get_values
-	connector onoffobs.give_power_usage => T1.get_power_usage
+	connector onoffobs.give_power_usage => onoff1.get_power_usage
 }

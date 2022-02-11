@@ -41,14 +41,13 @@ thing ZstickManager includes PSM_Msg
 	}
 } //end of ZstickManager
 
-thing ThermometerSet includes GeneralMsg, TemperatureMsg, PSM_Msg, TimerClient, Switch {
+thing ThermometerSet includes GeneralMsg, TemperatureMsg, PSM_Msg, TimerClient {
 // TimerClient introduced 160310
 	required port provide_val {sends temperature}
 	required port show_values {sends temperature}
 	provided port require_val {receives add_thermometer, set_polling_interval}
 	provided port initial {receives initialize}
 	provided port get_values {receives temperature} // SIMULATION
-	provided port get_power_usage {receives  current_power, total_power}
 		
 	property thermometers:Integer[25] // Identifiers of the thermometers in the set
 	property thermotext:String[25] // corresponding explanatory text 
@@ -129,11 +128,13 @@ thing ThermometerSet includes GeneralMsg, TemperatureMsg, PSM_Msg, TimerClient, 
 
 
 
-thing OnOffSet includes PSM_Msg, OnOffMsg, TimerClient{
+thing OnOffSet includes PSM_Msg, OnOffMsg, TimerClient, Switch{
 	provided port require_val {receives SwitchOn, SwitchOff, add_device, StateQuery}
 	provided port initial {receives initialize}
 	required port show_val {sends SwitchOn, SwitchOff}
 	provided port recv_state {receives SwitchStateOn, SwitchStateOff}
+	provided port get_power_usage {receives current_power, total_power}
+	required port send_power_usage {sends current_power, total_power}
 	required port send_state {sends SwitchStateOn, SwitchStateOff, CurrentPower, TotalPower}
 	required port pwr_timer {
 		receives timer_timeout
@@ -160,14 +161,6 @@ thing OnOffSet includes PSM_Msg, OnOffMsg, TimerClient{
 			event initial: initial?initialize
 		}
 		state Idle {
-		on entry pwr_timer!timer_start(1000)
-		
-			transition -> Idle
-			event pwr_timer?timer_timeout
-			guard switch_on
-			action do
-				total_power = total_power + 1200*60*60/1000/60/60
-			end
 			
 			transition -> Idle
 			event add_dev: require_val?add_device
@@ -192,9 +185,7 @@ thing OnOffSet includes PSM_Msg, OnOffMsg, TimerClient{
 				if (found) do
 					poweron[i-1]=true // ON by SIMULATION
 					if (fail_counter < 2) do
-						send_state!CurrentPower(1200*60*60) // simulated number in W
 						show_val!SwitchOn(did)
-						send_state!SwitchStateOn(did)
 						fail_counter=fail_counter+1
 						switch_on = true
 					end
@@ -219,7 +210,6 @@ thing OnOffSet includes PSM_Msg, OnOffMsg, TimerClient{
 					poweron[i-1]=false // OFF by SIMULATION
 					if (fail_counter < 2) do
 						show_val!SwitchOff(did)
-						send_state!TotalPower(total_power)
 						send_state!SwitchStateOff(did)
 						fail_counter=fail_counter+1
 						switch_on = false

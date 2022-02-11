@@ -12,10 +12,11 @@ import "psm_sim.thingml"
 import "pim_messages.thingml"
 import "timer.thingml"
 
-thing PIM includes GeneralMsg, TemperatureMsg, OnOffMsg, TimerMsgs {
+thing PIM includes GeneralMsg, TemperatureMsg, OnOffMsg, TimerMsgs, Switch {
 	provided port get_sensor {
 		receives temperature
 	}
+	provided port get_power_usage {receives current_power, total_power}
 	required port request_sensor {
 		sends add_thermometer, set_polling_interval
 	}
