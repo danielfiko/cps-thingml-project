@@ -21,11 +21,11 @@ thing PIM includes GeneralMsg, TemperatureMsg, OnOffMsg, TimerMsgs, Switch {
 		sends add_thermometer, set_polling_interval
 	}
 	required port request_actuator{
-		sends add_device, SwitchOn, SwitchOff, StateQuery
+		sends add_device, SwitchOn, SwitchOff, StateQuery, ResetTotalPower
 	}
 	provided port recv_state {receives SwitchStateOn, SwitchStateOff, CurrentPower, TotalPower, SwitchChangeOk, SwitchChangeFail}
 	provided port human_input {
-		receives add_thermometer, add_device, SwitchOn, SwitchOff, set_temperature, set_polling_interval, StateQuery
+		receives add_thermometer, add_device, SwitchOn, SwitchOff, set_temperature, set_polling_interval, StateQuery, ResetTotalPower
 	}
 	required port human_output {
 		sends temperature, prompt, SwitchStateOn, SwitchStateOff
@@ -356,6 +356,12 @@ thing PIM includes GeneralMsg, TemperatureMsg, OnOffMsg, TimerMsgs, Switch {
 				// just forward the polling interval instructions to the PSM
 				request_sensor!set_polling_interval(pollint.intrvl)
 			end
+			
+			transition -> Running
+			event switch:human_input?ResetTotalPower
+			action do
+				request_actuator!ResetTotalPower(switch.did)
+			end			
 			
 			transition -> Running
 			event power:get_power_usage?current_power

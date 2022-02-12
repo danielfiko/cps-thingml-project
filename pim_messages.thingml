@@ -34,6 +34,7 @@ thing fragment OnOffMsg includes DeviceGeneral{
 	message TotalPower(power:Double);
 	message SwitchChangeOk(did:Integer);
 	message SwitchChangeFail(did:Integer);
+	message ResetTotalPower(did:Integer);
 }
 
 thing fragment Switch {

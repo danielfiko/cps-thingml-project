@@ -129,9 +129,9 @@ thing ThermometerSet includes GeneralMsg, TemperatureMsg, PSM_Msg, TimerClient {
 
 
 thing OnOffSet includes PSM_Msg, OnOffMsg, TimerClient, Switch{
-	provided port require_val {receives SwitchOn, SwitchOff, add_device, StateQuery}
+	provided port require_val {receives SwitchOn, SwitchOff, add_device, StateQuery, ResetTotalPower}
 	provided port initial {receives initialize}
-	required port show_val {sends SwitchOn, SwitchOff}
+	required port show_val {sends SwitchOn, SwitchOff, ResetTotalPower}
 	provided port recv_state {receives SwitchStateOn, SwitchStateOff}
 	provided port get_power_usage {receives current_power, total_power}
 	required port send_power_usage {sends current_power, total_power}
@@ -222,6 +222,14 @@ thing OnOffSet includes PSM_Msg, OnOffMsg, TimerClient, Switch{
 					end
 				end
 			end
+	 
+	transition -> Idle
+	event switch: require_val?ResetTotalPower
+	action do
+		show_val!ResetTotalPower(switch.did)
+		send_power_usage!total_power(switch.did, 0)
+	end
+	
     transition -> Idle
 	event power:get_power_usage?current_power
 	action do
@@ -253,7 +261,7 @@ thing TempSim includes TemperatureMsg
 
 thing OnOffSim includes OnOffMsg, Switch
 @mock "true"
-{	provided port show_onoff {receives SwitchOn, SwitchOff}
+{	provided port show_onoff {receives SwitchOn, SwitchOff, ResetTotalPower}
 	required port give_power_usage {sends current_power, total_power}
 }
 
