@@ -23,7 +23,7 @@ thing PIM includes GeneralMsg, TemperatureMsg, OnOffMsg, TimerMsgs, Switch {
 	required port request_actuator{
 		sends add_device, SwitchOn, SwitchOff, StateQuery
 	}
-	provided port recv_state {receives SwitchStateOn, SwitchStateOff, CurrentPower, TotalPower}
+	provided port recv_state {receives SwitchStateOn, SwitchStateOff, CurrentPower, TotalPower, SwitchChangeOk, SwitchChangeFail}
 	provided port human_input {
 		receives add_thermometer, add_device, SwitchOn, SwitchOff, set_temperature, set_polling_interval, StateQuery
 	}
@@ -189,7 +189,7 @@ thing PIM includes GeneralMsg, TemperatureMsg, OnOffMsg, TimerMsgs, Switch {
 				state TemprDecide {
 				on entry guard_temperature!timer_start(15000)  // hardcoded 15s to get the next temperature 
 				on exit guard_temperature!timer_cancel()
-					transition -> WaitSwitchReply
+					transition -> TemprDecrease
 					event temp2:get_sensor?temperature
 					guard temp2.t>=tmrature-1  // We choose switch OFF as much as we can here
 					action do
@@ -198,7 +198,7 @@ thing PIM includes GeneralMsg, TemperatureMsg, OnOffMsg, TimerMsgs, Switch {
 						lasttemp = temp2.t
 					end
 					
-					transition -> WaitSwitchReply
+					transition -> TemprIncrease
 					event temp2:get_sensor?temperature
 					guard temp2.t<tmrature-1
 					action do
@@ -214,65 +214,11 @@ thing PIM includes GeneralMsg, TemperatureMsg, OnOffMsg, TimerMsgs, Switch {
 					end
 				}
 				
-				state WaitSwitchReply {
-				on entry guard_switch!timer_start(500)
-				on exit guard_switch!timer_cancel()
-					
-					transition -> WaitSwitchReply
-					event power:recv_state?CurrentPower
-					action do
-						human_output!prompt("Current power usage in Watt: " + power.power)
-					end
-					
-					transition -> WaitSwitchReply
-					event power:recv_state?TotalPower
-					action do
-						human_output!prompt("Total power usage in kWh: " + power.power)
-					end
-					
-					transition -> TemprIncrease
-					guard not_sent_req and increasing
-					action do
-						not_sent_req = false
-					end
-					
-					transition -> TemprDecrease
-					guard not_sent_req and not increasing
-					action do
-						not_sent_req = false
-					end
-				
-					transition -> TemprIncrease
-					event recv_state?SwitchStateOn
-					guard increasing
-					action do
-					end
-					
-					transition -> TemprDecrease
-					event recv_state?SwitchStateOff
-					guard not increasing
-					action do
-					end
-					
-					transition -> TemprIncrease
-					event guard_switch?timer_timeout
-					guard increasing
-					action do
-						human_output!prompt("INTERNAL ERROR: No reply from switch - assuming it's still off")
-					end
-					
-					transition -> TemprDecrease
-					event guard_switch?timer_timeout
-					guard not increasing
-					action do
-						human_output!prompt("INTERNAL ERROR: No reply from switch - assuming it's still on")
-					end
-				}
 				state TemprIncrease{ // Invariant: Switch is ON and temperature should increase
 				on entry guard_temperature!timer_start(15000)
 				on exit guard_temperature!timer_cancel()
 
-					transition -> WaitSwitchReply 
+					transition -> TemprIncrease 
 					event temp:get_sensor?temperature
 					guard temp.t<=tmrature+1
 					action do
@@ -287,7 +233,7 @@ thing PIM includes GeneralMsg, TemperatureMsg, OnOffMsg, TimerMsgs, Switch {
 						lasttemp = temp.t
 					end
 					
-					transition -> WaitSwitchReply
+					transition -> TemprDecrease
 					event temp2:get_sensor?temperature
 					guard temp2.t>tmrature+1 
 					action do
@@ -307,7 +253,7 @@ thing PIM includes GeneralMsg, TemperatureMsg, OnOffMsg, TimerMsgs, Switch {
 				on entry guard_temperature!timer_start(15000) 
 				on exit guard_temperature!timer_cancel()
 				
-					transition-> WaitSwitchReply
+					transition-> TemprDecrease
 					event temp:get_sensor?temperature
 					guard temp.t>=tmrature-1
 					action do
@@ -322,7 +268,7 @@ thing PIM includes GeneralMsg, TemperatureMsg, OnOffMsg, TimerMsgs, Switch {
 						lasttemp = temp.t
 					end
 					
-					transition -> WaitSwitchReply
+					transition -> TemprIncrease
 					event temp2:get_sensor?temperature
 					guard temp2.t<tmrature-1
 					action do
@@ -411,7 +357,28 @@ thing PIM includes GeneralMsg, TemperatureMsg, OnOffMsg, TimerMsgs, Switch {
 				request_sensor!set_polling_interval(pollint.intrvl)
 			end
 			
+			transition -> Running
+			event power:get_power_usage?current_power
+			action do
+				human_output!prompt("Current power usage in Watt: " + power.kw)
+			end
+			
+			transition -> Running
+			event power:get_power_usage?total_power
+			action do
+				human_output!prompt("Total power usage in kWh: " + power.kwh)
+			end
+			
 			// Messages that should not occur, but may occur
+		    transition -> Running
+			event recv_state?SwitchChangeOk
+			action do
+			end	
+		    transition -> Running
+			event recv_state?SwitchChangeFail
+			action do
+				human_output!prompt("Switch has failed!")
+			end	
 			transition -> Running
 			event human_input?add_thermometer
 			action do
