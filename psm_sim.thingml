@@ -81,7 +81,7 @@ thing ThermometerSet includes GeneralMsg, TemperatureMsg, PSM_Msg, TimerClient {
 					id_s=thermometers[i]
 					temp_s=thermoval[i]	
 					// SIMULATION: if the temperature is outside reasonable range, do not return temperature. Simulates thermometer error
-					if (temp_s > -40 and temp_s < 50) do		
+					if (temp_s > -40 and temp_s < 50) do
 						provide_val!temperature(id_s,thermotext[i],temp_s)
 						show_values!temperature(id_s,thermotext[i],temp_s)
 					end
@@ -128,7 +128,7 @@ thing ThermometerSet includes GeneralMsg, TemperatureMsg, PSM_Msg, TimerClient {
 
 
 
-thing OnOffSet includes PSM_Msg, OnOffMsg, TimerClient, Switch{
+thing OnOffSet includes PSM_Msg, OnOffMsg, TimerClient, SwitchMsg{
 	provided port require_val {receives SwitchOn, SwitchOff, add_device, StateQuery, ResetTotalPower}
 	provided port initial {receives initialize}
 	required port show_val {sends SwitchOn, SwitchOff, ResetTotalPower}
@@ -188,7 +188,7 @@ thing OnOffSet includes PSM_Msg, OnOffMsg, TimerClient, Switch{
 						show_val!SwitchOn(did)
 						fail_counter=fail_counter+1
 						switch_on = true
-						send_state!SwitchChangeOk(did)
+						//send_state!SwitchChangeOk(did)
 					end
 					else do
 						fail_counter=0
@@ -243,8 +243,63 @@ thing OnOffSet includes PSM_Msg, OnOffMsg, TimerClient, Switch{
 	end
 		}
 	}
+}
+
+thing EnergySavingManager includes MotionSensorMsg, TimerMsgs {
+	provided port recieve_motion_status {receives motion, no_motion}
+	required port send_motion_status {sends motion, no_motion}
+	required port show_motion {sends motion, no_motion}
+	required port guard_motion{receives timer_timeout sends timer_start, timer_cancel}
+	property did:Integer
 	
-	
+	statechart behaviorEnergySaving init Motion {
+		state MotionGuard {
+			on entry guard_motion!timer_start(5000)
+			on exit guard_motion!timer_cancel()
+			
+			transition -> Motion
+			event motion_sensor:recieve_motion_status?motion
+			action do
+				show_motion!motion(motion_sensor.did)
+			end
+			
+			transition -> NoMotion
+			event guard_motion?timer_timeout
+			action do
+				send_motion_status!no_motion(did)
+			end
+			}
+
+		state NoMotion {
+			transition -> Motion
+			event motion_sensor:recieve_motion_status?motion
+			action do
+				send_motion_status!motion(motion_sensor.did)
+				show_motion!motion(motion_sensor.did)
+			end
+			
+			transition -> NoMotion
+			event motion_sensor:recieve_motion_status?no_motion
+			action do
+				show_motion!no_motion(motion_sensor.did)
+			end
+		}
+
+		state Motion {
+			transition -> MotionGuard
+			event motion_sensor:recieve_motion_status?no_motion
+			action do
+				did = motion_sensor.did
+				show_motion!no_motion(motion_sensor.did)
+			end
+			
+			transition -> Motion
+			event motion_sensor:recieve_motion_status?motion
+			action do
+				show_motion!motion(motion_sensor.did)
+			end
+		}
+	}
 }
 
 //SIMULATION
@@ -258,10 +313,16 @@ thing TempSim includes TemperatureMsg
 	}
 }
 
-
-thing OnOffSim includes OnOffMsg, Switch
+thing OnOffSim includes OnOffMsg, SwitchMsg
 @mock "true"
 {	provided port show_onoff {receives SwitchOn, SwitchOff, ResetTotalPower}
 	required port give_power_usage {sends current_power, total_power}
+}
+
+thing MotionSensorSim includes MotionSensorMsg
+@mock "true"
+{
+	provided port show_motion {receives motion, no_motion}
+	required port send_motion {sends motion, no_motion}
 }
 

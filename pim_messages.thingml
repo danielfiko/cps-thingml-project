@@ -15,6 +15,7 @@ thing fragment TemperatureMsg {
     message temperature(id:Integer, txt:String, t : Double);
     message add_thermometer(id:Integer,txt:String);
     message set_temperature(t:Double);
+    message set_energy_saving_temp(t:Double);
 }
 
 // Devices actuators in general
@@ -37,7 +38,15 @@ thing fragment OnOffMsg includes DeviceGeneral{
 	message ResetTotalPower(did:Integer);
 }
 
-thing fragment Switch {
+thing fragment SwitchMsg {
 	message current_power(id:Integer, kw:Integer);
 	message total_power(id:Integer, kwh:Double)
+	message show_current_power(did:Integer)
+	message show_total_power(did:Integer)
+}
+
+thing fragment MotionSensorMsg {
+	message motion(did:Integer)
+	message no_motion(did:Integer)
+	message add_motion_sensor(did:Integer)
 }

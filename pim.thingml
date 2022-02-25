@@ -12,7 +12,7 @@ import "psm_sim.thingml"
 import "pim_messages.thingml"
 import "timer.thingml"
 
-thing PIM includes GeneralMsg, TemperatureMsg, OnOffMsg, TimerMsgs, Switch {
+thing PIM includes GeneralMsg, TemperatureMsg, OnOffMsg, TimerMsgs, SwitchMsg, MotionSensorMsg {
 	provided port get_sensor {
 		receives temperature
 	}
@@ -25,7 +25,7 @@ thing PIM includes GeneralMsg, TemperatureMsg, OnOffMsg, TimerMsgs, Switch {
 	}
 	provided port recv_state {receives SwitchStateOn, SwitchStateOff, CurrentPower, TotalPower, SwitchChangeOk, SwitchChangeFail}
 	provided port human_input {
-		receives add_thermometer, add_device, SwitchOn, SwitchOff, set_temperature, set_polling_interval, StateQuery, ResetTotalPower
+		receives add_thermometer, add_device, SwitchOn, SwitchOff, set_temperature, set_polling_interval, StateQuery, ResetTotalPower, set_energy_saving_temp
 	}
 	required port human_output {
 		sends temperature, prompt, SwitchStateOn, SwitchStateOff
@@ -49,6 +49,10 @@ thing PIM includes GeneralMsg, TemperatureMsg, OnOffMsg, TimerMsgs, Switch {
 		receives timer_timeout
 		sends timer_start, timer_cancel
 	}
+	provided port recieve_motion_status
+    {
+		receives motion, no_motion
+	}
 	
 	
 	property tmrature:Double = 20 // the requested temperature for the room
@@ -57,6 +61,8 @@ thing PIM includes GeneralMsg, TemperatureMsg, OnOffMsg, TimerMsgs, Switch {
 	property increasing:Boolean // temperature is expected to increase
 	property not_sent_req:Boolean = false // sent request to actuator
 	property lasttemp:Double = 0 // the last temperature recorded, buffering one measurement
+	property energy_saving_temp:Double
+	property comfort_temp:Double
 	
 	statechart PIM_behavior init Build {
 		on entry print("Running The Room X3B.sim")
@@ -183,8 +189,6 @@ thing PIM includes GeneralMsg, TemperatureMsg, OnOffMsg, TimerMsgs, Switch {
 		} // end Build
 		
 		composite state Running init Thermostat keeps history {
-		
-		
 			composite state Thermostat init TemprDecide {  // notice that we are not keeping history, we do not know whether to turn on or off
 				state TemprDecide {
 				on entry guard_temperature!timer_start(15000)  // hardcoded 15s to get the next temperature 
@@ -237,9 +241,9 @@ thing PIM includes GeneralMsg, TemperatureMsg, OnOffMsg, TimerMsgs, Switch {
 					event temp2:get_sensor?temperature
 					guard temp2.t>tmrature+1 
 					action do
-					increasing = false
-						request_actuator!SwitchOff(switch_id)
-						lasttemp = temp2.t
+						increasing = false
+							request_actuator!SwitchOff(switch_id)
+							lasttemp = temp2.t
 					end
 					
 					transition -> TemprIncrease
@@ -272,7 +276,7 @@ thing PIM includes GeneralMsg, TemperatureMsg, OnOffMsg, TimerMsgs, Switch {
 					event temp2:get_sensor?temperature
 					guard temp2.t<tmrature-1
 					action do
-					increasing = true
+						increasing = true
 						request_actuator!SwitchOn(switch_id)
 						lasttemp = temp2.t
 					end
@@ -300,6 +304,12 @@ thing PIM includes GeneralMsg, TemperatureMsg, OnOffMsg, TimerMsgs, Switch {
 				action do
 					tmrature = set_temp.t
 				end
+				transition -> Thermostat
+				event set_temp:human_input?set_energy_saving_temp
+				action do
+					tmrature = set_temp.t
+					energy_saving_temp = set_temp.t
+				end
 			} // end Thermostat
 			
 			state On {
@@ -318,6 +328,12 @@ thing PIM includes GeneralMsg, TemperatureMsg, OnOffMsg, TimerMsgs, Switch {
 				action do
 					tmrature = set_temp.t
 				end
+				transition -> Thermostat
+				event set_temp:human_input?set_energy_saving_temp
+				action do
+					tmrature = set_temp.t
+					energy_saving_temp = set_temp.t
+				end
 				transition -> On
 				event temp:get_sensor?temperature
 				action do
@@ -330,17 +346,22 @@ thing PIM includes GeneralMsg, TemperatureMsg, OnOffMsg, TimerMsgs, Switch {
 				event swoff:human_input?SwitchOff
 				action do
 					request_actuator!SwitchOff(swoff.did)
-				end 
+				end
 				transition -> On
 				event swon:human_input?SwitchOn
 				action do
 					request_actuator!SwitchOn(swon.did)
 				end
 				transition -> Thermostat
+				event set_temp:human_input?set_energy_saving_temp
+				action do
+					tmrature = set_temp.t
+				end
+				transition -> Thermostat
 				event set_temp:human_input?set_temperature
 				action do
 					tmrature = set_temp.t
-				end	
+				end
 				transition -> Off
 				event temp:get_sensor?temperature
 				action do
@@ -361,7 +382,7 @@ thing PIM includes GeneralMsg, TemperatureMsg, OnOffMsg, TimerMsgs, Switch {
 			event switch:human_input?ResetTotalPower
 			action do
 				request_actuator!ResetTotalPower(switch.did)
-			end			
+			end
 			
 			transition -> Running
 			event power:get_power_usage?current_power
@@ -375,21 +396,37 @@ thing PIM includes GeneralMsg, TemperatureMsg, OnOffMsg, TimerMsgs, Switch {
 				human_output!prompt("Total power usage in kWh: " + power.kwh)
 			end
 			
+			transition -> Running
+			event motion_sensor:recieve_motion_status?no_motion
+			action do
+				comfort_temp = tmrature
+				tmrature = energy_saving_temp
+			end
+			
+			transition -> Running
+			event motion_sensor:recieve_motion_status?motion
+			action do
+				if (comfort_temp > 0)
+					tmrature = comfort_temp
+			end
+			
+			
+			
 			// Messages that should not occur, but may occur
 		    transition -> Running
 			event recv_state?SwitchChangeOk
 			action do
-			end	
+			end
 		    transition -> Running
 			event recv_state?SwitchChangeFail
 			action do
 				human_output!prompt("Switch has failed!")
-			end	
+			end
 			transition -> Running
 			event human_input?add_thermometer
 			action do
 				human_output!prompt("Adding thermometers has been done and then blocked")
-			end	
+			end
 			transition -> Running
 			event human_input?add_device
 			action do

@@ -12,8 +12,11 @@ configuration CPS {
 	instance g_temp:TimerJava
 	instance g_humn:TimerJava
 	instance g_switch:TimerJava
+	instance g_motion:TimerJava
 	instance timer : TimerJava
 	instance pwr_timer:TimerJava
+	instance motion_sensor:MotionSensorSim
+	instance energy_save_manager:EnergySavingManager
 	
 	// SIMULATION
 	instance tg:TempSim
@@ -33,6 +36,10 @@ configuration CPS {
 	
 	connector onoff1.send_power_usage => pim.get_power_usage
 	
+	connector energy_save_manager.guard_motion => g_motion.timer
+	connector energy_save_manager.send_motion_status => pim.recieve_motion_status
+	connector energy_save_manager.show_motion => motion_sensor.show_motion
+	
 	// HMI
 	connector myself.send_cmd => pim.human_input
 	
@@ -48,4 +55,5 @@ configuration CPS {
 	// SIMULATION
 	connector tg.give_values => T1.get_values
 	connector onoffobs.give_power_usage => onoff1.get_power_usage
+	connector motion_sensor.send_motion => energy_save_manager.recieve_motion_status
 }

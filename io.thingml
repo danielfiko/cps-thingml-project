@@ -5,10 +5,11 @@ import "datatypes.thingml" from stl
 import "pim.thingml"
 
 // A Mock only needs the port definition and a Swing component will be generated
-thing Human includes TemperatureMsg, GeneralMsg, OnOffMsg
+thing Human includes TemperatureMsg, GeneralMsg, OnOffMsg, SwitchMsg
 @mock "true"
 { 	required port send_cmd {
-		sends add_thermometer, add_device, SwitchOn, SwitchOff, set_temperature, set_polling_interval, ResetTotalPower
+		sends add_thermometer, add_device, set_temperature, SwitchOn, SwitchOff,
+		set_polling_interval, ResetTotalPower, set_energy_saving_temp
 	}
 	provided port get_values {
 		receives temperature, prompt, SwitchStateOn, SwitchStateOff
