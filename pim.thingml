@@ -21,11 +21,12 @@ thing PIM includes GeneralMsg, TemperatureMsg, OnOffMsg, TimerMsgs, SwitchMsg, M
 		sends add_thermometer, set_polling_interval
 	}
 	required port request_actuator{
-		sends add_device, SwitchOn, SwitchOff, StateQuery, ResetTotalPower
+		sends add_device, SwitchOn, SwitchOff, StateQuery, ResetTotalPower, show_current_power, show_total_power
 	}
 	provided port recv_state {receives SwitchStateOn, SwitchStateOff, CurrentPower, TotalPower, SwitchChangeOk, SwitchChangeFail}
 	provided port human_input {
-		receives add_thermometer, add_device, SwitchOn, SwitchOff, set_temperature, set_polling_interval, StateQuery, ResetTotalPower, set_energy_saving_temp
+		receives add_thermometer, add_device, SwitchOn, SwitchOff, set_temperature, set_polling_interval, 
+			StateQuery, ResetTotalPower, set_energy_saving_temp, show_current_power, show_total_power
 	}
 	required port human_output {
 		sends temperature, prompt, SwitchStateOn, SwitchStateOff
@@ -65,7 +66,7 @@ thing PIM includes GeneralMsg, TemperatureMsg, OnOffMsg, TimerMsgs, SwitchMsg, M
 	property comfort_temp:Double
 	
 	statechart PIM_behavior init Build {
-		on entry print("Running The Room X3B.sim")
+		on entry println("Running The Room X3B.sim")
 		
 		composite state Build init AddThermo keeps history {
 		on entry guard_human!timer_start(30000) // 30s to do the whole build 
@@ -170,6 +171,7 @@ thing PIM includes GeneralMsg, TemperatureMsg, OnOffMsg, TimerMsgs, SwitchMsg, M
 			event set_temp:human_input?set_temperature
 			action do
 				tmrature = set_temp.t
+				comfort_temp = tmrature
 				human_output!prompt("Now entering thermostat. Please give temperature observations") // SIMULATION: prompting on console for the user to react properly
 			end
 			
@@ -191,33 +193,19 @@ thing PIM includes GeneralMsg, TemperatureMsg, OnOffMsg, TimerMsgs, SwitchMsg, M
 		composite state Running init Thermostat keeps history {
 			composite state Thermostat init TemprDecide {  // notice that we are not keeping history, we do not know whether to turn on or off
 				state TemprDecide {
-				on entry guard_temperature!timer_start(15000)  // hardcoded 15s to get the next temperature 
-				on exit guard_temperature!timer_cancel()
 					transition -> TemprDecrease
-					event temp2:get_sensor?temperature
-					guard temp2.t>=tmrature-1  // We choose switch OFF as much as we can here
+					guard lasttemp>=tmrature-1  // We choose switch OFF as much as we can here
 					action do
-						increasing = false
 						request_actuator!SwitchOff(switch_id)
-						lasttemp = temp2.t
 					end
 					
 					transition -> TemprIncrease
-					event temp2:get_sensor?temperature
-					guard temp2.t<tmrature-1
+					guard lasttemp < tmrature-1
 					action do
-						increasing = true
 						request_actuator!SwitchOn(switch_id)
-						lasttemp = temp2.t
-					end
-					
-					transition -> TemprDecide
-					event timout:guard_temperature?timer_timeout
-					action do
-						human_output!prompt("WARNING: @TemprDecide - temperature measurement is delayed")
 					end
 				}
-				
+
 				state TemprIncrease{ // Invariant: Switch is ON and temperature should increase
 				on entry guard_temperature!timer_start(15000)
 				on exit guard_temperature!timer_cancel()
@@ -288,7 +276,6 @@ thing PIM includes GeneralMsg, TemperatureMsg, OnOffMsg, TimerMsgs, SwitchMsg, M
 					end
 				}
 
-				
 				transition -> On
 				event swon:human_input?SwitchOn
 				action do
@@ -356,6 +343,7 @@ thing PIM includes GeneralMsg, TemperatureMsg, OnOffMsg, TimerMsgs, SwitchMsg, M
 				event set_temp:human_input?set_energy_saving_temp
 				action do
 					tmrature = set_temp.t
+					energy_saving_temp = set_temp.t
 				end
 				transition -> Thermostat
 				event set_temp:human_input?set_temperature
@@ -369,7 +357,7 @@ thing PIM includes GeneralMsg, TemperatureMsg, OnOffMsg, TimerMsgs, SwitchMsg, M
 					lasttemp = temp.t
 				end
 			}
-			
+
 			// Transitions of the composite state Running
 			transition -> Running
 			event pollint:human_input?set_polling_interval
@@ -389,11 +377,23 @@ thing PIM includes GeneralMsg, TemperatureMsg, OnOffMsg, TimerMsgs, SwitchMsg, M
 			action do
 				human_output!prompt("Current power usage in Watt: " + power.kw)
 			end
+
+			transition -> Running
+			event power:human_input?show_current_power
+			action do
+				request_actuator!show_current_power(1)
+			end
 			
 			transition -> Running
 			event power:get_power_usage?total_power
 			action do
 				human_output!prompt("Total power usage in kWh: " + power.kwh)
+			end
+
+			transition -> Running
+			event power:human_input?show_total_power
+			action do
+				request_actuator!show_total_power(1)
 			end
 			
 			transition -> Running

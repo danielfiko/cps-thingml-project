@@ -1,115 +1,62 @@
 /* This is the PSM the Platform Specific Model */
-/*** This version contains a SIMULATED platform */
+/*** This version contains the real gadget platform */
+
+/* This is the first very hard-coded Z-wave version 190105 */
+/* This version is very hardcoded for the openhabianpi version 190206 */
+
 /* This version has possibility to change the polling intervals for temperature */
-import "datatypes.thingml" from stl
+import "datatypes.thingml" from stl	
 import "pim_messages.thingml"
-import "javatimer.thingml" 
+import "javatimer.thingml" // 160310
 
-// PSM specific messages
 
-thing fragment PSM_Msg {
-	message initialize();
-}
+protocol MQTT @serializer "JSON"
+  @mqtt_broker_address "localhost"
+  @mqtt_broker_port "1883" 
+  @mqtt_publish_topic "CPS2021/SwitchControl"
+  @mqtt_subscribe_topic "CPS2021/tempoutput";
 
-// We need a way to initialize the Tellstick etc
-// This defines the central kick-down concept. The maven_dep stuff refers to an installed Maven project
-thing ZstickManager includes PSM_Msg
-{ 	/* Ports may be defined here */
-	required port to_T1 {
-		sends initialize
+
+thing MQTTDriver includes TemperatureMsg, OnOffMsg, LuminanceMsg, MotionMsg, GeneralMsg {
+	required port provide_temp {sends temperature}
+	required port provide_lum_motion {sends luminance, motion, nomotion}
+	provided port require_val {receives add_thermometer, add_lightsensor, add_device, add_motionsensor, SwitchOn, SwitchOff}
+	
+	//Only one MQTT port to receive the sensor values
+	provided port MQTT {
+		receives temperature,luminance,motion, nomotion
+		sends SwitchOn,SwitchOff
 	}
-	
-	required port to_onoff1 {
-		sends initialize
-	}
-	
-	/* properties defined here */
-	
-	function initialize() do
-	// kick-down initialization
 
-		to_T1!initialize()
-		to_onoff1!initialize()
-		
-	end //initialize
-	
-	statechart ZstickBehavior init Init {
-		state Init {
-		on entry do 
-			initialize()
-		end }
-	}
-} //end of ZstickManager
-
-thing ThermometerSet includes GeneralMsg, TemperatureMsg, PSM_Msg, TimerClient {
-// TimerClient introduced 160310
-	required port provide_val {sends temperature}
-	required port show_values {sends temperature}
-	provided port require_val {receives add_thermometer, set_polling_interval}
-	provided port initial {receives initialize}
-	provided port get_values {receives temperature} // SIMULATION
-		
 	property thermometers:Integer[25] // Identifiers of the thermometers in the set
 	property thermotext:String[25] // corresponding explanatory text 
-	
-	// SIMULATION
 	property thermoval:Double[25] // values to report from the corresponding thermometer
 	
+	property lightsensors:Integer[25] // Identifiers of the lightsensors in the set
+	property lightval:Double[25] // values to report from the corresponding lightsensor
+	
+	property motionsensors:Integer[25] // Identifiers of the thermometers in the set
+	
+	property last_mo:Integer = 0 // number of motion sensors in the set  
+	property last_light:Integer = 0 // number of light sensors in the set  
 	property last_thermo:Integer = 0 // number of thermometers in the set 
+	property foundL:Boolean // temporary - true when item found in loop
 	property i:Integer // runner index in list
-	property poll_intrvl:Integer = 10000 // polling interval in milliseconds, default is like hardcoded value from X2.sim
-	// property s:Sensor // runner Sensor (removed at SIMULATION)
-	property id_s:Long // temporary id value (to be used with kick-down)
-	property sensortype:Integer // temporary value for sensor type
-	property temp_s:Double // temporary temperature value
+	property id_s:Integer // temporary id value (to be used with kick-down)
 	property found:Boolean // temporary - true when item found in loop
 	
-	statechart behaviorThermometerSet init Init {
-		state Init {
-			transition -> Idle
-			event temp: initial?initialize
-			action do
-				timer!timer_start(poll_intrvl) // starting the polling cycle
-			end
-		}
+	
+	property onoffswitches:Integer[25] // Identifiers of the onoffswitches in the set
+	property last_onoff:Integer = 0 // number of onoff switches in the set 		
+	property did:Integer // temporary device id
+	
+	statechart behaviorMQTTDriver init Idle {
+	
 		state Idle {
 			transition -> Idle
-			event timout:timer?timer_timeout // 160310
+			event put_t:MQTT?temperature
 			action do
-				i=0
-				while (i<last_thermo)do
-					id_s=thermometers[i]
-					temp_s=thermoval[i]	
-					// SIMULATION: if the temperature is outside reasonable range, do not return temperature. Simulates thermometer error
-					if (temp_s > -40 and temp_s < 50) do
-						provide_val!temperature(id_s,thermotext[i],temp_s)
-						show_values!temperature(id_s,thermotext[i],temp_s)
-					end
-					i=i+1
-				end 
-				
-				timer!timer_start(poll_intrvl) // restarting the polling cycle
-			end
-			transition -> Idle
-			event pollintrvl:require_val?set_polling_interval
-			action do
-				poll_intrvl = pollintrvl.intrvl
-			end
-			transition -> Idle
-			event addt:require_val?add_thermometer
-			action do				
-				id_s=addt.id
-				thermometers[last_thermo]=id_s
-				thermotext[last_thermo]=addt.txt
-				thermoval[last_thermo]= 0 // just a default temperature
-				last_thermo = last_thermo+1
-			end
-			// SIMULATION receiving temperature from simulation interface
-			transition -> Idle
-			event put_temp:get_values?temperature
-			action do
-				id_s=put_temp.id
-				
+				id_s=put_t.id
 				i=0
 				found = false
 				while (i<last_thermo and (not found)) do
@@ -119,48 +66,93 @@ thing ThermometerSet includes GeneralMsg, TemperatureMsg, PSM_Msg, TimerClient {
 					i=i+1
 				end
 				if (found) do
-					thermoval[i-1]=put_temp.t	
+					thermoval[i-1]=put_t.t
+					provide_temp!temperature(id_s,thermotext[i],put_t.t)				
 				end
 			end
-		}
-	}
-} // ThermometerSet
-
-
-
-thing OnOffSet includes PSM_Msg, OnOffMsg, TimerClient, SwitchMsg{
-	provided port require_val {receives SwitchOn, SwitchOff, add_device, StateQuery, ResetTotalPower}
-	provided port initial {receives initialize}
-	required port show_val {sends SwitchOn, SwitchOff, ResetTotalPower}
-	provided port recv_state {receives SwitchStateOn, SwitchStateOff}
-	provided port get_power_usage {receives current_power, total_power}
-	required port send_power_usage {sends current_power, total_power}
-	required port send_state {sends SwitchStateOn, SwitchStateOff, CurrentPower, TotalPower, SwitchChangeOk, SwitchChangeFail}
-	required port pwr_timer {
-		receives timer_timeout
-		sends timer_start
-	}
-	
-	property onoffswitches:Integer[25] // Identifiers of the onoffswitches in the set
-	property last_onoff:Integer = 0 // number of onoff switches in the set 
-	
-	// SIMULATION
-	property poweron:Boolean[25] // SIMULATION false=OFF true=ON for corresponding switches
-	property switch_on:Boolean
-	property total_power:Double
-	
-	property i:Integer // runner index in list
-	property did:Integer // temporary device id
-	// property d:Device // temporary device removed at SIMULATION
-	property found:Boolean // temporary boolean used in while loop
-	property fail_counter:Integer
-	
-	statechart behaviorOnOffSet init Init {
-		state Init {
+			
 			transition -> Idle
-			event initial: initial?initialize
-		}
-		state Idle {
+			event put_lum:MQTT?luminance
+			action do
+				id_s=put_lum.id
+				
+				i=0
+				foundL = false
+				while (i<last_light and (not foundL)) do
+					if (id_s==lightsensors[i]) do
+						foundL=true // trick to terminate while loop
+					end
+					i=i+1
+				end
+				if (foundL) do
+					lightval[i-1]=put_lum.lum
+					provide_lum_motion!luminance(id_s,put_lum.lum)	
+				end
+			end
+			
+			// Receiving motion from Openhab and sending it instantaneously to PIM
+			transition -> Idle
+			event put_mo:MQTT?motion
+			action do
+				id_s=put_mo.id
+				i=0
+				found = false
+				while (i<last_mo and (not found)) do
+					if (id_s==motionsensors[i]) do
+						found=true // trick to terminate while loop
+					end
+					i=i+1
+				end
+				if (found) do
+					provide_lum_motion!motion(id_s)	
+				end
+			end
+
+			transition -> Idle
+			event put_mo:MQTT?nomotion
+			action do
+				id_s=put_mo.id
+				i=0
+				found = false
+				while (i<last_mo and (not found)) do
+					if (id_s==motionsensors[i]) do
+						found=true // trick to terminate while loop
+					end
+					i=i+1
+				end
+				if (found) do
+					provide_lum_motion!nomotion(id_s)	
+				end
+			end
+			
+			transition -> Idle
+			event addt:require_val?add_thermometer
+			action do				
+				id_s=addt.id
+				thermometers[last_thermo]=id_s
+				thermotext[last_thermo]=addt.txt
+				thermoval[last_thermo]= 20 // just a default temperature
+				last_thermo = last_thermo+1
+			end
+			
+			//Add Light Sensors
+			transition -> Idle
+			event addlum:require_val?add_lightsensor
+			action do				
+				id_s=addlum.id
+				lightsensors[last_light]=id_s
+				lightval[last_light]= 50 // just a default val
+				last_light = last_light+1
+			end
+			
+			//Add Motion Sensors
+			transition -> Idle
+			event add_ms:require_val?add_motionsensor
+			action do				
+				id_s=add_ms.id
+				motionsensors[last_mo]=id_s
+				last_mo = last_mo+1
+			end
 			
 			transition -> Idle
 			event add_dev: require_val?add_device
@@ -183,17 +175,7 @@ thing OnOffSet includes PSM_Msg, OnOffMsg, TimerClient, SwitchMsg{
 					i=i+1
 				end
 				if (found) do
-					poweron[i-1]=true // ON by SIMULATION
-					if (fail_counter < 2) do
-						show_val!SwitchOn(did)
-						fail_counter=fail_counter+1
-						switch_on = true
-						//send_state!SwitchChangeOk(did)
-					end
-					else do
-						fail_counter=0
-						send_state!SwitchChangeFail(did)
-					end
+					MQTT!SwitchOn(did)
 				end
 			end
 			transition -> Idle
@@ -209,120 +191,10 @@ thing OnOffSet includes PSM_Msg, OnOffMsg, TimerClient, SwitchMsg{
 					i=i+1
 				end
 				if (found) do
-					poweron[i-1]=false // OFF by SIMULATION
-					if (fail_counter < 2) do
-						show_val!SwitchOff(did)
-						fail_counter=fail_counter+1
-						switch_on = false
-						send_state!SwitchChangeOk(did)
-					end
-					else do
-						fail_counter=0
-						send_state!SwitchChangeFail(did)
-					end
+					MQTT!SwitchOff(did)
 				end
-			end
-	 
-	transition -> Idle
-	event switch: require_val?ResetTotalPower
-	action do
-		show_val!ResetTotalPower(switch.did)
-		send_power_usage!total_power(switch.did, 0)
-	end
-	
-    transition -> Idle
-	event power:get_power_usage?current_power
-	action do
-		send_power_usage!current_power(power.id, power.kw)
-	end
-	
-	transition -> Idle
-	event power:get_power_usage?total_power
-	action do
-		send_power_usage!total_power(power.id, power.kwh)
-	end
+			end			
 		}
 	}
-}
-
-thing EnergySavingManager includes MotionSensorMsg, TimerMsgs {
-	provided port recieve_motion_status {receives motion, no_motion}
-	required port send_motion_status {sends motion, no_motion}
-	required port show_motion {sends motion, no_motion}
-	required port guard_motion{receives timer_timeout sends timer_start, timer_cancel}
-	property did:Integer
-	
-	statechart behaviorEnergySaving init Motion {
-		state MotionGuard {
-			on entry guard_motion!timer_start(5000)
-			on exit guard_motion!timer_cancel()
-			
-			transition -> Motion
-			event motion_sensor:recieve_motion_status?motion
-			action do
-				show_motion!motion(motion_sensor.did)
-			end
-			
-			transition -> NoMotion
-			event guard_motion?timer_timeout
-			action do
-				send_motion_status!no_motion(did)
-			end
-			}
-
-		state NoMotion {
-			transition -> Motion
-			event motion_sensor:recieve_motion_status?motion
-			action do
-				send_motion_status!motion(motion_sensor.did)
-				show_motion!motion(motion_sensor.did)
-			end
-			
-			transition -> NoMotion
-			event motion_sensor:recieve_motion_status?no_motion
-			action do
-				show_motion!no_motion(motion_sensor.did)
-			end
-		}
-
-		state Motion {
-			transition -> MotionGuard
-			event motion_sensor:recieve_motion_status?no_motion
-			action do
-				did = motion_sensor.did
-				show_motion!no_motion(motion_sensor.did)
-			end
-			
-			transition -> Motion
-			event motion_sensor:recieve_motion_status?motion
-			action do
-				show_motion!motion(motion_sensor.did)
-			end
-		}
-	}
-}
-
-//SIMULATION
-thing TempSim includes TemperatureMsg 
-@mock "true"
-{ 	required port give_values {
-		sends temperature
-	}
-	provided port show_values {
-		receives temperature
-	}
-}
-
-thing OnOffSim includes OnOffMsg, SwitchMsg
-@mock "true"
-{	provided port show_onoff {receives SwitchOn, SwitchOff, ResetTotalPower}
-	required port give_power_usage {sends current_power, total_power}
-}
-
-thing MotionSensorSim includes MotionSensorMsg
-@mock "true"
-{
-	provided port show_motion {receives motion, no_motion}
-	required port send_motion {sends motion, no_motion}
-}
+} // MQTTDriver
 

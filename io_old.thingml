@@ -1,0 +1,341 @@
+/* ThingML Framework */
+
+// Base datatypes
+import "datatypes.thingml" from stl
+import "pim.thingml"
+
+thing StartButton includes TestMsg
+@mock "true"
+{	required port start {sends next_human}
+}
+
+
+// A Mock only needs the port definition and a Swing component will be generated
+thing Human includes TemperatureMsg, GeneralMsg, OnOffMsg, TestMsg, SwitchMsg
+//@mock "true"
+{ 	required port send_cmd {
+		sends add_thermometer, add_device, set_temperature, SwitchOn, SwitchOff,
+		ResetTotalPower, set_energy_saving_temp, show_current_power, show_total_power
+	}
+	required port send_sync_sensor{
+		sends start_temp
+	}
+	provided port get_values {
+		receives temperature, set_temperature, prompt, next_human
+	}
+		
+	statechart TestBuildInputs init Starting {
+
+		state Starting {
+			transition -> WaitInitialPrompt
+			event start:get_values?next_human
+		}
+		
+		// Build
+		state WaitInitialPrompt {
+			on entry do
+				//send_cmd!set_polling_interval(300)
+				send_cmd!add_thermometer(1,"t")
+			end
+
+			transition -> WaitSetTemp
+			event prompt: get_values?prompt
+			guard prompt.txt == "Please add one switch device"
+			action do
+					send_cmd!add_device(1)
+			end
+			transition -> Fail
+			event prompt2: get_values?prompt
+			guard prompt2.txt != "Please add one switch device"
+			action do
+				println("Human:Fail at WaitInitialPrompt")
+			end
+		}
+		
+		state WaitSetTemp {
+			transition -> WaitThermoPrompt
+			event prompt2:get_values?prompt
+			guard prompt2.txt == "Please give thermostat temperature setting"
+			action do
+				send_cmd!set_temperature(20)
+			end
+			transition -> Fail
+			event prompt3:get_values?prompt
+			guard prompt3.txt != "Please give thermostat temperature setting"
+			action do
+				println("Human:Fail at add_device - " + prompt3.txt)
+			end
+		}
+		
+		state WaitThermoPrompt {
+			transition -> SwitchOnThenOffPermanent // first test
+			event prompt:get_values?prompt
+			guard prompt.txt == "Now entering thermostat. Please give temperature observations"
+			action do
+				//println("Human:TRACE: Build Success")
+				//start Thermostat testing
+				send_sync_sensor!start_temp()
+			end
+			transition -> Fail
+			event prompt2:get_values?prompt
+			guard prompt2.txt != "Now entering thermostat. Please give temperature observations"
+			action do
+				println("Human:Fail at set_temperature" + prompt2.txt)
+			end				
+		}
+		
+		//OnOrOff and EnergySaving
+		state SwitchOnThenOffPermanent {
+			transition -> WaitForPromptOnTotalEnergy
+			event s_on:get_values?next_human
+			action do
+				send_cmd!SwitchOn(1)
+				send_cmd!SwitchOff(1)
+				// Energy Saving
+				send_cmd!ResetTotalPower(1)
+			end
+		}
+		state WaitForPromptOnTotalEnergy {
+			transition -> MeasureCurrentPower
+			event pr:get_values?prompt
+			guard pr.txt == "Total power usage in kWh: 0.0"
+			action do
+				// initiating Energy Saving action
+				send_cmd!set_energy_saving_temp(15.0)
+			end
+			transition -> Fail
+			event pr2:get_values?prompt
+			guard pr2.txt != "Total power usage in kWh: 0.0"
+		}
+		
+		// Energy Measurement
+		state MeasureCurrentPower{
+			transition -> CurrentPowerResult
+			event nh:get_values?next_human
+			action do
+				send_cmd!show_current_power(1)
+			end
+		}
+		state CurrentPowerResult{
+			transition -> TotalEnergyResult
+			event pr:get_values?prompt
+			guard pr.txt == "Current power usage in Watt: 1500"
+			action do
+				send_cmd!show_total_power(1)
+			end
+			transition -> Fail
+			event pr:get_values?prompt
+			guard pr.txt != "Current power usage in Watt: 1500"
+			action do
+				println("Human:Fail current power should be 1500: "+pr.txt)
+			end			
+		}
+		state TotalEnergyResult{
+			transition -> Success
+			event pr:get_values?prompt
+			guard pr.txt == "Total power usage in kWh: 2.4"
+			action do
+				send_cmd!show_total_power(1)
+			end
+			transition -> Fail
+			event pr:get_values?prompt
+			guard pr.txt != "Total power usage in kWh: 2.4"
+			action do
+				println("Human:Fail total power should be 2.4: "+pr.txt)
+			end						
+		}
+				
+		final state Success{
+			on entry do
+				println("Human: Success")
+			end
+		}
+		
+		final state Fail{
+			on entry do
+				println("Human: Fail")
+			end
+		}
+		
+	}
+}
+
+
+//SIMULATION
+thing TempSim includes TemperatureMsg, TestMsg, MotionSensorMsg
+// @mock "true"
+{ 	required port give_values {
+		sends temperature, motion
+	}
+	provided port show_values {
+		receives temperature, start_temp, next_temp, next_motion
+	}
+	required port sync_cmd {
+		sends next_human
+	}
+	
+	statechart TempBehavior init WaitNextTemp1{
+		
+		// Thermostat
+		state WaitNextTemp1{
+			transition ->WaitNextTemp2
+			event show_values?next_temp
+			action do
+				give_values!temperature(1,"t",20)
+				give_values!temperature(1,"t",23)
+			end
+		}
+		state WaitNextTemp2{
+			transition -> EnergySaving
+			event show_values?next_temp
+			action do
+				sync_cmd!next_human()
+				//println("TempSim:TRACE: WaitNextTemp2")
+			end			
+		}
+		
+		// OnOrOff
+		// The Multisensor is not involved in the OnOrOff test section
+		
+		// Energy saving
+		// Giving a temperature which is higher than energy_saving_temp but less than comfort
+		
+		state EnergySaving {
+			transition -> FinalTempTest
+			event show_values?next_motion
+			action do
+				give_values!temperature(1,"t",18)
+				give_values!motion(1)
+			end
+		}
+		
+		final state FinalTempTest{
+			on entry do
+				println("TempSim:Success")
+			end
+		}
+	}
+}
+
+thing OnOffSim includes OnOffMsg, SwitchMsg, TestMsg
+// @mock "true"
+{	provided port show_onoff {receives SwitchOn, SwitchOff, ResetTotalPower}
+	required port give_power_usage {sends current_power, total_power}
+	required port send_sync_sensor{	sends next_temp, next_motion}
+	required port send_sync_human {sends next_human}
+	
+	
+	statechart OnOffSimBehavior init On1{
+		state On1 {
+			transition ->Off1
+			event show_onoff?SwitchOn
+			action do
+				send_sync_sensor!next_temp()
+			end
+			transition ->Fail
+			event show_onoff?SwitchOff
+			action do
+				println("OnOffSim:Fail at SwitchOn when Too Cold")
+			end
+		}
+		state Off1 {
+			transition ->Fail
+			event show_onoff?SwitchOn
+			action do
+				println("OnOffSim:Fail at SwitchOff when Too Hot")
+			end
+			transition ->On2 
+			event show_onoff?SwitchOff
+			action do
+				//println("OnOffSim:TRACE: Success end of Thermostat")
+				send_sync_sensor!next_temp()
+			end
+		}
+		state On2 {
+			transition ->Off2
+			event show_onoff?SwitchOn
+			action do
+				send_sync_sensor!next_temp()
+			end
+			transition ->Fail
+			event show_onoff?SwitchOff
+			action do
+				println("OnOffSim:Fail at SwitchOn when Permanently On")
+			end
+		}
+		state Off2 {
+			transition ->Fail
+			event show_onoff?SwitchOn
+			action do
+				println("OnOffSim:Fail at SwitchOff when Permanently Off")
+			end
+			transition ->ExpectResetTotalPower 
+			event show_onoff?SwitchOff
+			action do
+				//println("OnOffSim:TRACE: Off2")
+			end
+		}
+		state ExpectResetTotalPower{
+			transition -> Off3
+			event show_onoff?ResetTotalPower
+			action do
+				//println("OnOffSim:TRACE: Off3 read ResetTotalPower")
+			end
+			transition ->Fail
+			event show_onoff?SwitchOn
+			action do
+				println("OnOffSim:Fail SwitchOn when expecting ResetTotalPower")
+			end
+			transition ->Fail 
+			event show_onoff?SwitchOff
+			action do
+				println("OnOffSim:Fail SwitchOff when expecting ResetTotalPower")
+			end			
+		}
+		
+		state Off3{
+			transition ->Fail
+			event show_onoff?SwitchOn
+			action do
+				println("OnOffSim:Fail SwitchOn when expecting SwitchOff on energy save")
+			end
+			transition ->On3 
+			event show_onoff?SwitchOff
+			action do
+				send_sync_sensor!next_motion()
+				//println("OnOffSim:TRACE: sent next_motion")
+			end				
+		}
+		state On3 {
+			transition ->Success
+			event show_onoff?SwitchOn
+			action do
+				give_power_usage!current_power(1,1500)
+				send_sync_human!next_human()
+				give_power_usage!total_power(1,2.4)
+				send_sync_human!next_human()
+			end
+			transition ->Fail
+			event show_onoff?SwitchOff
+			action do
+				println("OnOffSim:Fail at SwitchOn when motion initiates comfort")
+			end
+		}
+		
+		final state Success{
+			on entry do
+				println("OnOffSim: Success")
+			end
+		}
+		
+		final state Fail{
+			on entry do
+				println("OnOffSim: Fail")
+			end
+		}
+		
+	}
+
+}
+
+

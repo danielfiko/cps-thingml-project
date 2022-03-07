@@ -10,6 +10,14 @@ thing fragment GeneralMsg {
 	message prompt(txt:String) // meant to send a textual message out to the user
 }
 
+// Testing
+thing fragment TestMsg {
+	message start_temp();
+	message next_temp();
+	message next_human();
+	message next_motion();
+}
+
 //Temperature
 thing fragment TemperatureMsg {
     message temperature(id:Integer, txt:String, t : Double);
