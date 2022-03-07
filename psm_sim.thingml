@@ -86,7 +86,7 @@ thing MQTTDriver includes TemperatureMsg, OnOffMsg, LuminanceMsg, MotionMsg, Gen
 				end
 				if (foundL) do
 					lightval[i-1]=put_lum.lum
-					provide_lum_motion!luminance(id_s,put_lum.lum)	
+					provide_lum_motion!luminance(id_s, put_lum.lum)	
 				end
 			end
 			
