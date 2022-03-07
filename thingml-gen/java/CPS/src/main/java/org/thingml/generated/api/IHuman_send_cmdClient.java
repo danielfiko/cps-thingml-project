@@ -1,0 +1,14 @@
+package org.thingml.generated.api;
+
+import org.thingml.generated.api.*;
+
+public interface IHuman_send_cmdClient{
+void add_thermometer_from_send_cmd(int TemperatureMsg_add_thermometer_id_var, String TemperatureMsg_add_thermometer_txt_var);
+void add_device_from_send_cmd(int DeviceGeneral_add_device_did_var);
+void set_temperature_from_send_cmd(double TemperatureMsg_set_temperature_t_var);
+void SwitchOn_from_send_cmd(int OnOffMsg_SwitchOn_did_var);
+void SwitchOff_from_send_cmd(int OnOffMsg_SwitchOff_did_var);
+void set_polling_interval_from_send_cmd(int GeneralMsg_set_polling_interval_intrvl_var);
+void ResetTotalPower_from_send_cmd(int OnOffMsg_ResetTotalPower_did_var);
+void set_energy_saving_temp_from_send_cmd(double TemperatureMsg_set_energy_saving_temp_t_var);
+}

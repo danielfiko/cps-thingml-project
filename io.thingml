@@ -15,3 +15,14 @@ thing Human includes TemperatureMsg, GeneralMsg, OnOffMsg, SwitchMsg
 		receives temperature, prompt, SwitchStateOn, SwitchStateOff
 	}
 }
+
+thing TraceOnly includes LuminanceMsg, MotionMsg 
+@mock "true"
+{	required port build {
+		sends add_lightsensor, add_motionsensor
+	}
+	
+	provided port trace_lum_motion {
+		receives luminance, motion, nomotion
+	}
+}

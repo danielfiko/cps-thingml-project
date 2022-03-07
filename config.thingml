@@ -4,27 +4,62 @@ import "io.thingml"
 import "javatimer.thingml"
 
 configuration CPS {
-	instance zstick:ZstickManager
-	instance T1:ThermometerSet
-	instance onoff1:OnOffSet
+	instance T1:MQTTDriver
+	instance trace:TraceOnly
 	instance pim:PIM
 	instance myself:Human
 	instance g_temp:TimerJava
 	instance g_humn:TimerJava
 	instance g_switch:TimerJava
+	
+	// PSM	
+	connector T1.provide_temp => pim.get_sensor
+	
+	// The luminance and motion are not used in this model only traced
+	connector T1.provide_lum_motion => trace.trace_lum_motion
+	connector trace.build =>T1.require_val
+	
+	// HMI
+	connector myself.send_cmd => pim.human_input
+	
+	// PIM outwards 
+	connector pim.request_sensor => T1.require_val
+	connector pim.request_actuator => T1.require_val
+	connector pim.human_output => myself.get_values
+	
+	connector pim.guard_temperature =>g_temp.timer
+	connector pim.guard_human => g_humn.timer
+	connector pim.guard_switch => g_switch.timer
+	
+	//Receive values from Openhab connected sensors via MQTT protocol
+	connector T1.MQTT over MQTT
+	
+	/*
+	//instance zstick:ZstickManager
+	instance T1:MQTTDriver
+	//instance onoff1:OnOffSet
+	instance pim:PIM
+	instance myself:Human
+	instance g_temp:TimerJava
+	instance g_humn:TimerJava
+	
 	instance g_motion:TimerJava
 	instance timer : TimerJava
 	instance pwr_timer:TimerJava
-	instance energy_save_manager:EnergySavingManager
+	//instance energy_save_manager:EnergySavingManager
 	
-	// Test Components
+	/* Test Components
 	instance tg:TempSim
 	instance onoffobs:OnOffSim
 	instance starter:StartButton
 	
-	// PSM
+	// The luminance and motion are not used in this model only traced
+	connector T1.provide_lum_motion => trace.trace_lum_motion
+	connector trace.build =>T1.require_val
+	
+	/* / PSM
 	connector zstick.to_T1 => T1.initial
-	connector zstick.to_onoff1 => onoff1.initial
+	connector zstick.to_onoff1 => onoff1.initial 
 	
 	connector T1.provide_val => pim.get_sensor
 	connector T1.timer => timer.timer
@@ -51,7 +86,7 @@ configuration CPS {
 	connector pim.guard_human => g_humn.timer
 	connector pim.guard_switch => g_switch.timer
 	
-	// Test synchronization etc.
+	// Test synchronisation etc.
 	connector tg.give_values => T1.get_values
 	connector onoffobs.give_power_usage => onoff1.get_power_usage
 	connector tg.give_values => energy_save_manager.recieve_motion_status
@@ -61,4 +96,5 @@ configuration CPS {
 	connector onoffobs.send_sync_sensor => tg.show_values
 	connector onoffobs.send_sync_human => myself.get_values
 	connector starter.start => myself.get_values
+	*/
 }

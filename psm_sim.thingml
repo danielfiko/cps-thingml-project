@@ -24,8 +24,8 @@ thing MQTTDriver includes TemperatureMsg, OnOffMsg, LuminanceMsg, MotionMsg, Gen
 	
 	//Only one MQTT port to receive the sensor values
 	provided port MQTT {
-		receives temperature,luminance,motion, nomotion
-		sends SwitchOn,SwitchOff
+		receives temperature, luminance, motion, nomotion
+		sends SwitchOn, SwitchOff
 	}
 
 	property thermometers:Integer[25] // Identifiers of the thermometers in the set

@@ -1,0 +1,17 @@
+package org.thingml.generated.api;
+
+import org.thingml.generated.api.*;
+
+public interface IPIM_human_input{
+void add_thermometer_via_human_input(int TemperatureMsg_add_thermometer_id_var, String TemperatureMsg_add_thermometer_txt_var);
+void add_device_via_human_input(int DeviceGeneral_add_device_did_var);
+void SwitchOn_via_human_input(int OnOffMsg_SwitchOn_did_var);
+void SwitchOff_via_human_input(int OnOffMsg_SwitchOff_did_var);
+void set_temperature_via_human_input(double TemperatureMsg_set_temperature_t_var);
+void set_polling_interval_via_human_input(int GeneralMsg_set_polling_interval_intrvl_var);
+void StateQuery_via_human_input(int OnOffMsg_StateQuery_did_var);
+void ResetTotalPower_via_human_input(int OnOffMsg_ResetTotalPower_did_var);
+void set_energy_saving_temp_via_human_input(double TemperatureMsg_set_energy_saving_temp_t_var);
+void show_current_power_via_human_input(int SwitchMsg_show_current_power_did_var);
+void show_total_power_via_human_input(int SwitchMsg_show_total_power_did_var);
+}
